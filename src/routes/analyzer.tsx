@@ -98,6 +98,12 @@ function Analyzer() {
               text: `Analysis complete — ${res.errors.filter((e) => e.severity === "error").length} error(s) found.`,
             },
       );
+    } catch {
+      setResult(null);
+      setNotice({
+        tone: "error",
+        text: "Unable to analyze the code. Please check the backend connection.",
+      });
     } finally {
       setLoading(false);
     }
