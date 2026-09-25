@@ -59,7 +59,7 @@ function normalize(raw: RemoteResponse, code: string, fileName: string, started:
       explanation: e.explanation ?? "",
       suggestion: e.suggestion ?? "",
       originalLine: lines[line - 1] ?? "",
-      correctedLine: e.correctedLine,
+      ...(e.correctedLine ? { correctedLine: e.correctedLine } : {}),
     };
   });
   const hasErrors = errors.some((e) => e.severity === "error");
