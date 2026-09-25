@@ -16,8 +16,8 @@ const SAMPLE = `public class Test {
 
 export const Route = createFileRoute("/analyzer")({
   validateSearch: (search: Record<string, unknown>): { upload?: boolean | undefined; record?: string | undefined } => ({
-    upload: search.upload === true || search.upload === "true" ? true : undefined,
-    record: typeof search.record === "string" ? search.record : undefined,
+    upload: search['upload'] === true || search['upload'] === "true" ? true : undefined,
+    record: typeof search['record'] === "string" ? search['record'] : undefined,
   }),
   head: () => ({
     meta: [

@@ -279,7 +279,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     );
     const decl = code.match(declPattern);
     if (decl && !CONTROL_STARTS.test(code) && !code.includes("(" + decl[1])) {
-      const name = decl[1];
+      const name = decl[1]!;
       if (declared.has(name)) {
         issues.push(
           makeIssue({
@@ -301,7 +301,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     // --- undeclared variable ---------------------------------------------
     const plainAssign = code.match(/^([A-Za-z_]\w*)\s*(?:\+|-|\*|\/)?=\s*[^=]/);
     if (plainAssign && !decl && !CONTROL_STARTS.test(code)) {
-      const name = plainAssign[1];
+      const name = plainAssign[1]!;
       if (!declared.has(name) && !PRIMITIVES.includes(name) && name !== "this") {
         issues.push(
           makeIssue({
@@ -325,7 +325,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     for (const m of code.matchAll(
       new RegExp(`\\b(?:${PRIMITIVES.join("|")}|String|var|[A-Z]\\w*)(?:\\s*<[^>]*>)?(?:\\s*\\[\\s*\\])*\\s+([A-Za-z_]\\w*)\\s*(?=[,)=;:])`, "g"),
     )) {
-      if (!declared.has(m[1])) {
+      if (m[1] && !declared.has(m[1])) {
         declared.add(m[1]);
         declaredAt.set(m[1], lineNo);
       }
@@ -335,8 +335,8 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     const noStrings = code.replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/'(?:\\.|[^'\\])*'/g, "''");
     if (!/^\s*(?:public|private|protected|static|class|interface|enum|import|package)\b/.test(noStrings)) {
       for (const call of noStrings.matchAll(/[A-Za-z_]\w*\s*\(([^()]*)\)/g)) {
-        for (const arg of call[1].split(/[,+\-*/%<>=!&|]+/)) {
-          const name = arg.trim();
+        for (const arg of (call[1] ?? "").split(/[,+\-*/%<>=!&|]+/)) {
+          const name = (arg ?? "").trim();
           if (
             /^[a-z_]\w*$/.test(name) &&
             !declared.has(name) &&
