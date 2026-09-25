@@ -15,9 +15,9 @@ const SAMPLE = `public class Test {
 }`;
 
 export const Route = createFileRoute("/analyzer")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    upload: search.upload === true || search.upload === "true" ? true : undefined,
-    record: typeof search.record === "string" ? search.record : undefined,
+  validateSearch: (search: Record<string, unknown>): { upload?: boolean | undefined; record?: string | undefined } => ({
+    upload: search['upload'] === true || search['upload'] === "true" ? true : undefined,
+    record: typeof search['record'] === "string" ? search['record'] : undefined,
   }),
   head: () => ({
     meta: [
@@ -98,6 +98,12 @@ function Analyzer() {
               text: `Analysis complete — ${res.errors.filter((e) => e.severity === "error").length} error(s) found.`,
             },
       );
+    } catch {
+      setResult(null);
+      setNotice({
+        tone: "error",
+        text: "Unable to analyze the code. Please check the backend connection.",
+      });
     } finally {
       setLoading(false);
     }
@@ -170,7 +176,7 @@ function Analyzer() {
               disabled={loading}
               className="rounded-[8px] bg-ink px-3.5 py-2 font-mono text-xs font-medium text-paper disabled:opacity-60"
             >
-              {loading ? "Analyzing…" : "Analyze code"}
+              {loading ? "Analyzing Java code..." : "Analyze code"}
             </button>
           </div>
         </div>

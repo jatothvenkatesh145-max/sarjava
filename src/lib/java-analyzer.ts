@@ -18,7 +18,7 @@ export interface AnalysisIssue {
   explanation: string;
   suggestion: string;
   originalLine: string;
-  correctedLine?: string;
+  correctedLine?: string | undefined;
 }
 
 export interface AnalysisResult {
@@ -238,7 +238,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
             "A String holds text. Assigning a bare number is an incompatible type in Java.",
           suggestion: `Wrap the value in quotes: \`String ${strAssign[1]} = "${strAssign[2]}";\``,
           originalLine: raw,
-          correctedLine: raw.replace(strAssign[2], `"${strAssign[2]}"`),
+          correctedLine: raw.replace(strAssign[2]!, `"${strAssign[2]}"`),
         }),
       );
     }
@@ -279,7 +279,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     );
     const decl = code.match(declPattern);
     if (decl && !CONTROL_STARTS.test(code) && !code.includes("(" + decl[1])) {
-      const name = decl[1];
+      const name = decl[1]!;
       if (declared.has(name)) {
         issues.push(
           makeIssue({
@@ -301,7 +301,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
     // --- undeclared variable ---------------------------------------------
     const plainAssign = code.match(/^([A-Za-z_]\w*)\s*(?:\+|-|\*|\/)?=\s*[^=]/);
     if (plainAssign && !decl && !CONTROL_STARTS.test(code)) {
-      const name = plainAssign[1];
+      const name = plainAssign[1]!;
       if (!declared.has(name) && !PRIMITIVES.includes(name) && name !== "this") {
         issues.push(
           makeIssue({
@@ -318,6 +318,45 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
         );
         declared.add(name);
         declaredAt.set(name, lineNo);
+      }
+    }
+
+    // register parameters / loop variables / catch vars: `Type name` pairs anywhere
+    for (const m of code.matchAll(
+      new RegExp(`\\b(?:${PRIMITIVES.join("|")}|String|var|[A-Z]\\w*)(?:\\s*<[^>]*>)?(?:\\s*\\[\\s*\\])*\\s+([A-Za-z_]\\w*)\\s*(?=[,)=;:])`, "g"),
+    )) {
+      if (m[1] && !declared.has(m[1])) {
+        declared.add(m[1]);
+        declaredAt.set(m[1], lineNo);
+      }
+    }
+
+    // --- undeclared variable used as a call argument ----------------------
+    const noStrings = code.replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/'(?:\\.|[^'\\])*'/g, "''");
+    if (!/^\s*(?:public|private|protected|static|class|interface|enum|import|package)\b/.test(noStrings)) {
+      for (const call of noStrings.matchAll(/[A-Za-z_]\w*\s*\(([^()]*)\)/g)) {
+        for (const arg of (call[1] ?? "").split(/[,+\-*/%<>=!&|]+/)) {
+          const name = (arg ?? "").trim();
+          if (
+            /^[a-z_]\w*$/.test(name) &&
+            !declared.has(name) &&
+            !["true", "false", "null", "this", "super", "new"].includes(name)
+          ) {
+            issues.push(
+              makeIssue({
+                line: lineNo,
+                type: "Variable Error",
+                severity: "error",
+                message: `Variable '${name}' is not declared`,
+                explanation:
+                  "The program is trying to use a variable that has not been declared. Java must know a variable's type before it can be used.",
+                suggestion: `Declare the variable before using it, e.g. \`int ${name} = 0;\`, or check the spelling.`,
+                originalLine: raw,
+              }),
+            );
+            declared.add(name);
+          }
+        }
       }
     }
 
