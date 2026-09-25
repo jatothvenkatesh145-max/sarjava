@@ -176,7 +176,7 @@ function Analyzer() {
               disabled={loading}
               className="rounded-[8px] bg-ink px-3.5 py-2 font-mono text-xs font-medium text-paper disabled:opacity-60"
             >
-              {loading ? "Analyzing…" : "Analyze code"}
+              {loading ? "Analyzing Java code..." : "Analyze code"}
             </button>
           </div>
         </div>
