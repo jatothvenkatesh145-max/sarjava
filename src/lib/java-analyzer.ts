@@ -321,6 +321,45 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
       }
     }
 
+    // register parameters / loop variables / catch vars: `Type name` pairs anywhere
+    for (const m of code.matchAll(
+      new RegExp(`\\b(?:${PRIMITIVES.join("|")}|String|var|[A-Z]\\w*)(?:\\s*<[^>]*>)?(?:\\s*\\[\\s*\\])*\\s+([A-Za-z_]\\w*)\\s*(?=[,)=;:])`, "g"),
+    )) {
+      if (!declared.has(m[1])) {
+        declared.add(m[1]);
+        declaredAt.set(m[1], lineNo);
+      }
+    }
+
+    // --- undeclared variable used as a call argument ----------------------
+    const noStrings = code.replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/'(?:\\.|[^'\\])*'/g, "''");
+    if (!/^\s*(?:public|private|protected|static|class|interface|enum|import|package)\b/.test(noStrings)) {
+      for (const call of noStrings.matchAll(/[A-Za-z_]\w*\s*\(([^()]*)\)/g)) {
+        for (const arg of call[1].split(/[,+\-*/%<>=!&|]+/)) {
+          const name = arg.trim();
+          if (
+            /^[a-z_]\w*$/.test(name) &&
+            !declared.has(name) &&
+            !["true", "false", "null", "this", "super", "new"].includes(name)
+          ) {
+            issues.push(
+              makeIssue({
+                line: lineNo,
+                type: "Variable Error",
+                severity: "error",
+                message: `Variable '${name}' is not declared`,
+                explanation:
+                  "The program is trying to use a variable that has not been declared. Java must know a variable's type before it can be used.",
+                suggestion: `Declare the variable before using it, e.g. \`int ${name} = 0;\`, or check the spelling.`,
+                originalLine: raw,
+              }),
+            );
+            declared.add(name);
+          }
+        }
+      }
+    }
+
     // --- assignment inside condition --------------------------------------
     const condAssign = code.match(/\bif\s*\(\s*([A-Za-z_]\w*)\s*=\s*[^=]/);
     if (condAssign) {
