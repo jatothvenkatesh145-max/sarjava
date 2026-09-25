@@ -18,7 +18,7 @@ export interface AnalysisIssue {
   explanation: string;
   suggestion: string;
   originalLine: string;
-  correctedLine?: string;
+  correctedLine?: string | undefined;
 }
 
 export interface AnalysisResult {
