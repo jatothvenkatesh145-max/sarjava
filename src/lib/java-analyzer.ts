@@ -238,7 +238,7 @@ export function analyzeJava(source: string, fileName = "Main.java"): AnalysisRes
             "A String holds text. Assigning a bare number is an incompatible type in Java.",
           suggestion: `Wrap the value in quotes: \`String ${strAssign[1]} = "${strAssign[2]}";\``,
           originalLine: raw,
-          correctedLine: raw.replace(strAssign[2], `"${strAssign[2]}"`),
+          correctedLine: raw.replace(strAssign[2]!, `"${strAssign[2]}"`),
         }),
       );
     }
