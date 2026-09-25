@@ -79,7 +79,7 @@ export default function Home() {
                 </Link>
                 <Link
                   to="/analyzer"
-                  search={{ upload: true }}
+                  search={{ upload: true, record: undefined }}
                   className="inline-flex items-center gap-2 rounded-[8px] px-5 py-2.5 text-sm font-medium text-ink ring-1 ring-ink/15 transition-colors hover:bg-ink/5"
                 >
                   Upload Java File
