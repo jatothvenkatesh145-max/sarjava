@@ -16,7 +16,7 @@ import { analyzeJava, type AnalysisIssue, type AnalysisResult } from "@/lib/java
 
 export type AnalyzerMode = "mock" | "remote";
 
-const API_BASE = (import.meta.env.VITE_ANALYZER_API as string | undefined)?.replace(/\/$/, "");
+const API_BASE = (import.meta.env['VITE_ANALYZER_API'] as string | undefined)?.replace(/\/$/, "");
 
 export const ANALYZER_MODE: AnalyzerMode = API_BASE ? "remote" : "mock";
 
