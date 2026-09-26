@@ -5,13 +5,13 @@ import { summarize, useHistory } from "@/lib/history-store";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Analysis dashboard — JavaBench" },
+      { title: "Analysis dashboard — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Totals for analyses run, errors detected, valid programs and the most common Java error type.",
       },
-      { property: "og:title", content: "Analysis dashboard — JavaBench" },
+      { property: "og:title", content: "Analysis dashboard — Smart Java Error Analyzer" },
       {
         property: "og:description",
         content: "Track how many Java files you analyzed and which faults recur most.",

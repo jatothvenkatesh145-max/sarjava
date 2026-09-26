@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CodeSlab } from "@/components/CodeSlab";
 import { ResultPanel } from "@/components/ResultPanel";
-import { analyzeCode, ANALYZER_MODE } from "@/services/analyzerService";
+import { analyzeCode, runCode, ANALYZER_MODE, type RunResult } from "@/services/analyzerService";
+import { OutputPanel } from "@/components/OutputPanel";
 import type { AnalysisResult } from "@/lib/java-analyzer";
 import { saveAnalysis, useHistory } from "@/lib/history-store";
 
@@ -21,16 +22,16 @@ export const Route = createFileRoute("/analyzer")({
   }),
   head: () => ({
     meta: [
-      { title: "Analyzer workspace — JavaBench" },
+      { title: "Analyzer workspace — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Paste or upload Java source and get line-accurate errors, plain-language explanations and suggested corrections.",
       },
-      { property: "og:title", content: "Analyzer workspace — JavaBench" },
+      { property: "og:title", content: "Analyzer workspace — Smart Java Error Analyzer" },
       {
         property: "og:description",
-        content: "The JavaBench editor and analysis result panel for Java source files.",
+        content: "The Smart Java Error Analyzer editor and analysis result panel for Java source files.",
       },
     ],
   }),
@@ -47,6 +48,8 @@ function Analyzer() {
   const [loading, setLoading] = useState(false);
   const [activeLine, setActiveLine] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ tone: "error" | "ok"; text: string } | null>(null);
+  const [run, setRun] = useState<RunResult | null>(null);
+  const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<"edit" | "inspect">("edit");
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -77,7 +80,7 @@ function Analyzer() {
     [code],
   );
 
-  async function runAnalysis() {
+  async function runAnalysis(execute = false) {
     if (!code.trim()) {
       setNotice({ tone: "error", text: "Add some Java source before running the analysis." });
       return;
@@ -85,6 +88,7 @@ function Analyzer() {
     setNotice(null);
     setLoading(true);
     setActiveLine(null);
+    setRun(null);
     try {
       const res = await analyzeCode({ code, fileName });
       setResult(res);
@@ -98,6 +102,22 @@ function Analyzer() {
               text: `Analysis complete — ${res.errors.filter((e) => e.severity === "error").length} error(s) found.`,
             },
       );
+      if (execute) {
+        if (!res.valid) {
+          setRun({ status: "blocked", stdout: "", stderr: "", exitCode: null, timedOut: false,
+            message: "Program cannot be executed because compilation errors were detected." });
+        } else {
+          setRunning(true);
+          try {
+            setRun(await runCode({ code, fileName }));
+          } catch {
+            setRun({ status: "failed", stdout: "", stderr: "", exitCode: null, timedOut: false,
+              message: "Unable to run the code. Please check the backend connection." });
+          } finally {
+            setRunning(false);
+          }
+        }
+      }
     } catch {
       setResult(null);
       setNotice({
@@ -129,6 +149,7 @@ function Analyzer() {
   function clearCode() {
     setCode("");
     setResult(null);
+    setRun(null);
     setActiveLine(null);
     setMode("edit");
     setNotice(null);
@@ -172,11 +193,19 @@ function Analyzer() {
             />
             <button
               type="button"
-              onClick={runAnalysis}
-              disabled={loading}
+              onClick={() => runAnalysis(false)}
+              disabled={loading || running}
+              className="rounded-[8px] px-3 py-2 font-mono text-xs text-ink ring-1 ring-ink/25 transition-colors hover:bg-ink/5 disabled:opacity-60"
+            >
+              {loading && !running ? "Analyzing…" : "Analyze code"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runAnalysis(true)}
+              disabled={loading || running}
               className="rounded-[8px] bg-ink px-3.5 py-2 font-mono text-xs font-medium text-paper disabled:opacity-60"
             >
-              {loading ? "Analyzing Java code..." : "Analyze code"}
+              {running ? "Running…" : "Analyze & Run"}
             </button>
           </div>
         </div>
@@ -263,6 +292,8 @@ function Analyzer() {
             onSelectLine={setActiveLine}
           />
         </div>
+
+        <OutputPanel run={run} running={running} />
 
         {result && !result.valid ? (
           <div className="mt-5 grid gap-5 md:grid-cols-2">

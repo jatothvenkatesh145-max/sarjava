@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * JavaBench design system — "lab-bench inspection".
+ * Smart Java Error Analyzer design system — "lab-bench inspection".
  * Paper/ink academic surface, vermilion accent, dark code slab.
  * All colors are oklch tokens. Never hardcode colors in components.
  */

@@ -102,3 +102,54 @@ export async function analyzeCode(req: AnalyzeRequest): Promise<AnalysisResult> 
 }
 
 export type { AnalysisResult };
+
+/* ------------------------------------------------------------------ */
+/* Execution                                                           */
+/*                                                                     */
+/* Java is NEVER executed in the browser and output is NEVER simulated. */
+/* Execution is delegated to the Java backend:                         */
+/*   POST {VITE_ANALYZER_API}/api/run { code, fileName }                */
+/*     -> { stdout, stderr?, exitCode?, timedOut? }                     */
+/* The backend must compile + run inside an isolated sandbox           */
+/* (container / no network / CPU, memory and time limits).             */
+/* ------------------------------------------------------------------ */
+
+export interface RunResult {
+  status: "ok" | "blocked" | "unavailable" | "failed";
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  message?: string;
+}
+
+export async function runCode({ code, fileName = "Main.java" }: AnalyzeRequest): Promise<RunResult> {
+  const empty = { stdout: "", stderr: "", exitCode: null, timedOut: false };
+  if (ANALYZER_MODE !== "remote") {
+    return {
+      ...empty,
+      status: "unavailable",
+      message:
+        "Code execution requires the secure Java backend, which is not connected yet. No output is simulated.",
+    };
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, fileName }),
+    });
+  } catch {
+    throw new AnalyzerConnectionError("Java backend unreachable");
+  }
+  if (!res.ok) throw new AnalyzerConnectionError(`Run endpoint responded with ${res.status}`);
+  const raw = (await res.json()) as Partial<RunResult>;
+  return {
+    status: "ok",
+    stdout: typeof raw.stdout === "string" ? raw.stdout : "",
+    stderr: typeof raw.stderr === "string" ? raw.stderr : "",
+    exitCode: typeof raw.exitCode === "number" ? raw.exitCode : null,
+    timedOut: raw.timedOut === true,
+  };
+}

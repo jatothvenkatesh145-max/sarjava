@@ -3,13 +3,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Smart Java Code Analyzer — JavaBench" },
+      { title: "Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "An intelligent Java code analysis system that identifies programming errors, explains why they occurred, and provides possible corrections in simple language.",
       },
-      { property: "og:title", content: "Smart Java Code Analyzer — JavaBench" },
+      { property: "og:title", content: "Smart Java Error Analyzer" },
       {
         property: "og:description",
         content:

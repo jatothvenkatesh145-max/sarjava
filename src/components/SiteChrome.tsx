@@ -15,9 +15,9 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-8 px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5">
           <span className="grid size-7 place-items-center rounded-[8px] bg-ink font-mono text-xs font-bold text-paper">
-            JB
+            SJ
           </span>
-          <span className="text-[15px] font-semibold tracking-tight">JavaBench</span>
+          <span className="text-[15px] font-semibold tracking-tight">Smart Java Error Analyzer</span>
           <span className="ml-1 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
             v0.4
           </span>
@@ -70,9 +70,9 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-4 px-4 py-8 sm:flex-row sm:items-center sm:px-6">
         <div className="flex items-center gap-2.5">
           <span className="grid size-6 place-items-center rounded-[6px] bg-paper font-mono text-[10px] font-bold text-ink">
-            JB
+            SJ
           </span>
-          <span className="font-semibold tracking-tight">JavaBench</span>
+          <span className="font-semibold tracking-tight">Smart Java Error Analyzer</span>
         </div>
         <p className="font-mono text-[11px] text-paper/50">
           Educational static analysis · not a Java compiler · 2026

@@ -3,16 +3,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/how-it-works")({
   head: () => ({
     meta: [
-      { title: "How the analysis works — JavaBench" },
+      { title: "How the analysis works — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Six steps from Java source to a corrected program: enter code, analyze, detect, locate, explain, suggest.",
       },
-      { property: "og:title", content: "How the analysis works — JavaBench" },
+      { property: "og:title", content: "How the analysis works — Smart Java Error Analyzer" },
       {
         property: "og:description",
-        content: "The inspection pipeline behind JavaBench, step by step.",
+        content: "The inspection pipeline behind Smart Java Error Analyzer, step by step.",
       },
     ],
   }),
