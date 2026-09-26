@@ -21,16 +21,16 @@ export const Route = createFileRoute("/analyzer")({
   }),
   head: () => ({
     meta: [
-      { title: "Analyzer workspace — JavaBench" },
+      { title: "Analyzer workspace — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Paste or upload Java source and get line-accurate errors, plain-language explanations and suggested corrections.",
       },
-      { property: "og:title", content: "Analyzer workspace — JavaBench" },
+      { property: "og:title", content: "Analyzer workspace — Smart Java Error Analyzer" },
       {
         property: "og:description",
-        content: "The JavaBench editor and analysis result panel for Java source files.",
+        content: "The Smart Java Error Analyzer editor and analysis result panel for Java source files.",
       },
     ],
   }),

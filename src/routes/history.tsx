@@ -5,13 +5,13 @@ import { clearHistory, useHistory } from "@/lib/history-store";
 export const Route = createFileRoute("/history")({
   head: () => ({
     meta: [
-      { title: "Analysis history — JavaBench" },
+      { title: "Analysis history — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Every Java file analyzed on this device, with date, status, error count and error type.",
       },
-      { property: "og:title", content: "Analysis history — JavaBench" },
+      { property: "og:title", content: "Analysis history — Smart Java Error Analyzer" },
       {
         property: "og:description",
         content: "Reopen a previous Java analysis and read its faults again.",

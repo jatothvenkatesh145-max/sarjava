@@ -3,13 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About the project — JavaBench" },
+      { title: "About the project — Smart Java Error Analyzer" },
       {
         name: "description",
         content:
           "Smart Java Code Error Detection and Explanation System: problem statement, objectives, methodology, technologies and future scope.",
       },
-      { property: "og:title", content: "About the project — JavaBench" },
+      { property: "og:title", content: "About the project — Smart Java Error Analyzer" },
       {
         property: "og:description",
         content:
@@ -68,7 +68,7 @@ function About() {
           <div className="bg-paper p-6">
             <h2 className="text-lg font-semibold">Scope note</h2>
             <p className="mt-2 text-sm text-ink-soft text-pretty">
-              JavaBench performs static inspection in the browser. It is not a Java compiler, it
+              Smart Java Error Analyzer performs static inspection in the browser. It is not a Java compiler, it
               never executes submitted code, and analyses are stored only on this device until a
               backend database is connected.
             </p>

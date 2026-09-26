@@ -17,7 +17,7 @@ export function SiteHeader() {
           <span className="grid size-7 place-items-center rounded-[8px] bg-ink font-mono text-xs font-bold text-paper">
             JB
           </span>
-          <span className="text-[15px] font-semibold tracking-tight">JavaBench</span>
+          <span className="text-[15px] font-semibold tracking-tight">Smart Java Error Analyzer</span>
           <span className="ml-1 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">
             v0.4
           </span>
@@ -72,7 +72,7 @@ export function SiteFooter() {
           <span className="grid size-6 place-items-center rounded-[6px] bg-paper font-mono text-[10px] font-bold text-ink">
             JB
           </span>
-          <span className="font-semibold tracking-tight">JavaBench</span>
+          <span className="font-semibold tracking-tight">Smart Java Error Analyzer</span>
         </div>
         <p className="font-mono text-[11px] text-paper/50">
           Educational static analysis · not a Java compiler · 2026
