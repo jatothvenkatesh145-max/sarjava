@@ -66,7 +66,7 @@ export function ResultPanel({ result, loading, activeLine, onSelectLine }: Resul
         </span>
       </div>
 
-      {result.valid && warnings.length === 0 ? (
+      {result.errors.length === 0 ? (
         <div className="p-6">
           <p className="font-mono text-sm font-semibold text-ok">✓ NO ERROR FOUND</p>
           <p className="mt-2 text-sm text-ink-soft">The Java code passed the analysis.</p>

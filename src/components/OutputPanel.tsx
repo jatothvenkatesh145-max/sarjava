@@ -52,7 +52,7 @@ export function OutputPanel({ run, running, onClear }: OutputPanelProps) {
           <Section title="Execution status" tone={run.status === "ok" ? "text-code-str" : "text-amber"} text={[stats || (simulated ? "not executed" : run.status), run.message, run.timedOut ? "Execution stopped: time limit exceeded." : null].filter(Boolean).join("\n")} />
           {run.compileOutput ? <Section title="Compilation errors" tone="text-code-err" text={run.compileOutput} /> : null}
           {run.status === "ok" || run.stdout ? (
-            <Section title="Standard output" tone="text-code-ink" text={run.stdout || (simulated ? "(none)" : "Program executed successfully with no console output.")} />
+            <Section title="Standard output" tone="text-code-ink" text={run.stdout || (simulated ? "(none)" : run.statusText === "Accepted" ? "Program executed successfully with no console output." : "(no output)")} />
           ) : null}
           {run.stderr ? <Section title="Standard error" tone="text-code-err" text={run.stderr} /> : null}
         </div>

@@ -107,7 +107,7 @@ function buildResult(language: Lang, judge: JudgeResult, code: string, fileName:
   } else if (language === "c") {
     errors = gccIssues(judge.compileOutput, code, h.errors);
     if (!compileFailed) errors = errors.filter((e) => e.severity === "warning");
-    if (!compileFailed && judge.statusId >= 7) errors.push({ id: "crt-0", line: 1, type: `Runtime Error`, severity: "error", message: `runtime: ${judge.status}`, explanation: judge.status.includes("SIGFPE") ? "The program performed an invalid arithmetic operation, such as division by zero." : judge.status.includes("SIGSEGV") ? "The program accessed memory it does not own (bad pointer or array index)." : "The program crashed or returned a non-zero exit code.", suggestion: "Check divisions, array indexes and pointers.", originalLine: code.split("\n")[0] ?? "" });
+    if (!compileFailed && judge.statusId >= 7) errors.push({ id: "crt-0", line: 1, type: `Runtime Error`, severity: "error", message: `runtime: ${judge.stderr.split("\n").find((l) => l.trim()) ?? judge.status}`, explanation: (judge.status + judge.stderr).match(/SIGFPE|Floating point/i) ? "The program performed an invalid arithmetic operation, such as division by zero." : (judge.status + judge.stderr).match(/SIGSEGV|Segmentation/i) ? "The program accessed memory it does not own (bad pointer or array index)." : "The program crashed or returned a non-zero exit code.", suggestion: "Check divisions, array indexes and pointers.", originalLine: code.split("\n")[0] ?? "" });
   } else {
     const p = pythonIssues(judge.stderr, code);
     errors = p.issues;
