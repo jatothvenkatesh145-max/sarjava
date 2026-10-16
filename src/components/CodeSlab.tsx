@@ -1,4 +1,5 @@
-import { highlightJava } from "@/components/java-highlight";
+import { highlightCode } from "@/components/java-highlight";
+import type { Lang } from "@/lib/languages";
 import type { AnalysisIssue } from "@/lib/java-analyzer";
 
 interface CodeSlabProps {
@@ -8,6 +9,7 @@ interface CodeSlabProps {
   onSelectLine?: (line: number) => void;
   label?: string;
   tone?: "neutral" | "before" | "after";
+  language?: Lang | undefined;
 }
 
 /** Read-only dark code listing with line numbers and margin fault markers. */
@@ -18,6 +20,7 @@ export function CodeSlab({
   onSelectLine,
   label,
   tone = "neutral",
+  language = "java",
 }: CodeSlabProps) {
   const lines = code.replace(/\r\n/g, "\n").split("\n");
   const byLine = new Map<number, AnalysisIssue>();
@@ -75,7 +78,7 @@ export function CodeSlab({
               <code
                 className={`whitespace-pre pr-4 ${issue?.severity === "error" ? "text-code-err" : issue ? "text-amber" : "text-code-ink"}`}
               >
-                {line === "" ? " " : highlightJava(line)}
+                {line === "" ? " " : highlightCode(line, language)}
               </code>
             </button>
           );
