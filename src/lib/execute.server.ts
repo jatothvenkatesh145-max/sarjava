@@ -46,6 +46,9 @@ function toMainClass(code: string): string {
   return code.replace(new RegExp(`\\b${name}\\b`, "g"), "Main");
 }
 
+const b64 = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const unb64 = (s?: string | null) => (s ? new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), (c) => c.charCodeAt(0))) : "");
+
 export async function runInSandbox(language: Lang, code: string, stdin: string): Promise<JudgeResult> {
   const base = (process.env["JUDGE0_URL"] || "https://ce.judge0.com").replace(/\/$/, "");
   const key = process.env["JUDGE0_KEY"];
@@ -59,13 +62,13 @@ export async function runInSandbox(language: Lang, code: string, stdin: string):
       /* ignore */
     }
   }
-  const res = await fetch(`${base}/submissions?base64_encoded=false&wait=true`, {
+  const res = await fetch(`${base}/submissions?base64_encoded=true&wait=true`, {
     method: "POST",
     headers,
     body: JSON.stringify({
       language_id: LANGS[language].judgeId,
-      source_code: language === "java" ? toMainClass(code) : code,
-      stdin,
+      source_code: b64(language === "java" ? toMainClass(code) : code),
+      stdin: b64(stdin),
       cpu_time_limit: 5,
       wall_time_limit: 10,
       memory_limit: 256000,
@@ -85,9 +88,9 @@ export async function runInSandbox(language: Lang, code: string, stdin: string):
   return {
     status: r.status?.description ?? "Unknown",
     statusId: r.status?.id ?? 0,
-    stdout: r.stdout ?? "",
-    stderr: [r.stderr, r.status?.id && r.status.id >= 7 && !r.stderr ? r.message : null].filter(Boolean).join("\n"),
-    compileOutput: r.compile_output ?? "",
+    stdout: unb64(r.stdout),
+    stderr: [unb64(r.stderr), r.status?.id && r.status.id >= 7 && !r.stderr ? unb64(r.message) : null].filter(Boolean).join("\n"),
+    compileOutput: unb64(r.compile_output),
     time: r.time ?? null,
     memoryKb: r.memory ?? null,
     exitCode: typeof r.exit_code === "number" ? r.exit_code : null,
