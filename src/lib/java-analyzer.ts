@@ -31,6 +31,7 @@ export interface AnalysisResult {
   durationMs: number;
   analyzedAt: string;
   errors: AnalysisIssue[];
+  language?: "java" | "python" | "c" | undefined;
 }
 
 const CONTROL_STARTS =

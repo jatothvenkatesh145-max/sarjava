@@ -141,7 +141,7 @@ export function analyzeC(source: string, fileName = "main.c"): AnalysisResult {
       }
     }
     const next = clean.slice(i + 1).find((x) => x.trim())?.trim() ?? "";
-    if (/[\w)\]"'+-]$/.test(t) && !/^(if|else|for|while|do|switch|case|default)\b/.test(t) && !/^[{}]/.test(next) === false ? false : /[\w)\]"'+-]$/.test(t) && !/^(if|else|for|while|do|switch|case|default)\b/.test(t) && !next.startsWith("{") && !/\)\s*$/.test(t.replace(/^.*\b(?:printf|scanf|return|puts)\b.*$/, "x")) ) {
+    if (/[\w)\]"']$/.test(t) && !/^(if|else|for|while|do|switch|case|default)\b/.test(t) && !/^\}?\s*else\b/.test(t) && !next.startsWith("{")) {
       fixed[i] = raw.replace(/\s*$/, ";");
       issues.push(mk({ line: i + 1, type: "Missing Semicolon", severity: "error", message: "Statement is missing ';'", explanation: "Every C statement must end with a semicolon.", suggestion: "Add ';' at the end of this statement.", originalLine: raw, correctedLine: fixed[i] }));
     }
