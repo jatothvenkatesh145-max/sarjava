@@ -4,53 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CodeSlab } from "@/components/CodeSlab";
 import { ResultPanel } from "@/components/ResultPanel";
 import { OutputPanel } from "@/components/OutputPanel";
-import { highlightJava } from "@/components/java-highlight";
-import { analyzeCode, analyzeAndRun, type RunResult } from "@/services/analyzerService";
+import { highlightCode } from "@/components/java-highlight";
+import { analyzeCode, analyzeAndRun, simulate, type RunResult } from "@/services/analyzerService";
+import { EXAMPLES, LANGS, langFromFile, type Lang } from "@/lib/languages";
 import type { AnalysisResult } from "@/lib/java-analyzer";
 import { saveAnalysis, useHistory } from "@/lib/history-store";
 
-const EXAMPLES: { label: string; code: string; stdin?: string }[] = [
-  {
-    label: "Valid program",
-    code: `public class Main {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-    }
-}`,
-  },
-  {
-    label: "Missing semicolon",
-    code: `public class Main {
-    public static void main(String[] args) {
-        System.out.println("Hello")
-    }
-}`,
-  },
-  {
-    label: "Undeclared variable",
-    code: `public class Main {
-    public static void main(String[] args) {
-        System.out.println(value);
-    }
-}`,
-  },
-  {
-    label: "User input (Scanner)",
-    code: `import java.util.Scanner;
-
-public class Main {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        int number = sc.nextInt();
-        System.out.println(number * 2);
-        sc.close();
-    }
-}`,
-    stdin: "21",
-  },
-];
-
-const SAMPLE = EXAMPLES[0]!.code;
 const MAX_FILE = 64 * 1024;
 
 export const Route = createFileRoute("/analyzer")({
@@ -60,13 +19,13 @@ export const Route = createFileRoute("/analyzer")({
   }),
   head: () => ({
     meta: [
-      { title: "Analyzer workspace — Smart Java Error Analyzer" },
+      { title: "Analyzer — Java, Python & C | Smart Java Error Analyzer" },
       {
         name: "description",
-        content: "Write or upload Java, get real compiler errors explained in plain English, and run programs to see actual output.",
+        content: "Write or upload Java, Python or C, get real compiler errors explained in plain English, and run programs to see actual output.",
       },
       { property: "og:title", content: "Analyzer workspace — Smart Java Error Analyzer" },
-      { property: "og:description", content: "Java editor with real compilation, error explanations, fixes and live program output." },
+      { property: "og:description", content: "Java, Python and C editor with real execution, error explanations and fixes." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -80,7 +39,9 @@ function Analyzer() {
   const { upload, record } = Route.useSearch();
   const { records } = useHistory();
 
-  const [code, setCode] = useState(SAMPLE);
+  const [lang, setLang] = useState<Lang>("java");
+  const [execMode, setExecMode] = useState<"real" | "simulated">("real");
+  const [code, setCode] = useState(LANGS.java.sample);
   const [fileName, setFileName] = useState("Main.java");
   const [stdin, setStdin] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -113,6 +74,7 @@ function Analyzer() {
     if (found) {
       loadedRecord.current = record;
       setCode(found.source);
+      setLang(found.language ?? "java");
       setFileName(found.fileName);
       setResult(found);
       setMode("inspect");
@@ -124,7 +86,7 @@ function Analyzer() {
 
   function guard(): boolean {
     if (!code.trim()) {
-      setNotice({ tone: "error", text: "Add some Java source before running." });
+      setNotice({ tone: "error", text: "Add some source code before running." });
       return false;
     }
     setNotice(null);
@@ -137,17 +99,19 @@ function Analyzer() {
     setMode("inspect");
     saveAnalysis(res);
     const n = res.errors.filter((e) => e.severity === "error").length;
-    setNotice(res.valid ? { tone: "ok", text: "Compiled successfully — no compilation errors." } : { tone: "error", text: `Compilation failed — ${n} error(s) found.` });
+    const sim = execMode === "simulated" ? " (simulated heuristic check — not compiler-confirmed)" : "";
+    setNotice(res.valid ? { tone: "ok", text: `No compilation/syntax errors${n ? ` — ${n} runtime error(s)` : ""}${sim}.` } : { tone: "error", text: `${n} error(s) found${sim}.` });
   }
 
   async function detect() {
     if (!guard()) return;
+    if (execMode === "simulated") { report(simulate({ code, fileName, language: lang }).result); setTab("errors"); return; }
     setLoading(true);
     try {
-      report(await analyzeCode({ code, fileName, stdin }));
+      report(await analyzeCode({ code, fileName, stdin, language: lang }));
       setTab("errors");
     } catch {
-      setNotice({ tone: "error", text: "Unable to reach the Java compiler. Check your connection and try again." });
+      setNotice({ tone: "error", text: "Unable to reach the code execution service. Check your connection and try again." });
     } finally {
       setLoading(false);
     }
@@ -155,15 +119,16 @@ function Analyzer() {
 
   async function runProgram() {
     if (!guard()) return;
+    if (execMode === "simulated") { const sres = simulate({ code, fileName, language: lang }); report(sres.result); setRun(sres.run); setTab("output"); return; }
     setRunning(true);
     setRun(null);
     try {
-      const { result: res, run: r } = await analyzeAndRun({ code, fileName, stdin });
+      const { result: res, run: r } = await analyzeAndRun({ code, fileName, stdin, language: lang });
       report(res);
       setRun(r);
       setTab(res.valid ? "output" : "errors");
-    } catch {
-      setRun({ status: "failed", stdout: "", stderr: "", exitCode: null, timedOut: false, message: "Unable to run the code. The Java sandbox could not be reached — please try again." });
+    } catch (e) {
+      setRun({ status: "failed", stdout: "", stderr: "", exitCode: null, timedOut: false, mode: "real", message: `Unable to run the code. The execution service could not be reached or rejected the request — ${e instanceof Error ? e.message : "please try again"}.` });
       setTab("output");
     } finally {
       setRunning(false);
@@ -186,8 +151,9 @@ function Analyzer() {
 
   function handleFile(file: File | undefined) {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".java")) {
-      setNotice({ tone: "error", text: "Please upload a valid Java (.java) file." });
+    const fl = langFromFile(file.name);
+    if (!fl) {
+      setNotice({ tone: "error", text: "Please upload a .java, .py or .c file." });
       return;
     }
     if (file.size > MAX_FILE) {
@@ -198,6 +164,7 @@ function Analyzer() {
     reader.onload = () => {
       setCode(String(reader.result ?? ""));
       setFileName(file.name);
+      setLang(fl);
       setResult(null);
       setRun(null);
       setMode("edit");
@@ -208,11 +175,24 @@ function Analyzer() {
   }
 
   function loadExample(i: number) {
-    const ex = EXAMPLES[i];
+    const ex = EXAMPLES[lang][i];
     if (!ex) return;
     setCode(ex.code);
     setStdin(ex.stdin ?? "");
-    setFileName("Main.java");
+    setFileName(LANGS[lang].file);
+    setResult(null);
+    setRun(null);
+    setShowFixes(false);
+    setMode("edit");
+    setTab("editor");
+    setNotice(null);
+  }
+
+  function changeLang(l: Lang) {
+    setLang(l);
+    setCode(LANGS[l].sample);
+    setFileName(LANGS[l].file);
+    setStdin("");
     setResult(null);
     setRun(null);
     setShowFixes(false);
@@ -241,8 +221,22 @@ function Analyzer() {
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-semibold tracking-tight">Analyzer workspace</h1>
             <span className="font-mono text-[11px] text-ink-soft">{fileName}</span>
-            <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">javac sandbox</span>
+            <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft">{execMode === "real" ? `${LANGS[lang].tool} sandbox` : "simulated"}</span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-soft">
+            Language
+            <select aria-label="Programming language" value={lang} onChange={(e) => changeLang(e.target.value as Lang)} className="rounded-[8px] bg-paper px-2 py-2 font-mono text-xs text-ink ring-1 ring-ink/15">
+              {(Object.keys(LANGS) as Lang[]).map((l) => <option key={l} value={l}>{LANGS[l].label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-soft">
+            Mode
+            <select aria-label="Execution mode" value={execMode} onChange={(e) => { setExecMode(e.target.value as "real" | "simulated"); setRun(null); setResult(null); }} className="rounded-[8px] bg-paper px-2 py-2 font-mono text-xs text-ink ring-1 ring-ink/15">
+              <option value="real">Real execution</option>
+              <option value="simulated">Simulated</option>
+            </select>
+          </label>
           <select
             aria-label="Load example program"
             value=""
@@ -250,10 +244,11 @@ function Analyzer() {
             className="rounded-[8px] bg-paper px-2 py-2 font-mono text-xs text-ink ring-1 ring-ink/15"
           >
             <option value="" disabled>Load example…</option>
-            {EXAMPLES.map((ex, i) => (
+            {EXAMPLES[lang].map((ex, i) => (
               <option key={ex.label} value={i}>{ex.label}</option>
             ))}
           </select>
+          </div>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -264,10 +259,10 @@ function Analyzer() {
             {loading ? "Compiling…" : "Detect Errors"}
           </button>
           <button type="button" onClick={fixSuggestions} disabled={busy} className={btn}>Fix Suggestions</button>
-          <button type="button" onClick={() => fileRef.current?.click()} className={btn}>Upload Java File</button>
+          <button type="button" onClick={() => fileRef.current?.click()} className={btn}>Upload File</button>
           <button type="button" onClick={clearCode} className={btn}>Clear Code</button>
           <button type="button" onClick={() => setRun(null)} disabled={!run} className={btn}>Clear Output</button>
-          <input ref={fileRef} type="file" accept=".java" className="hidden" onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }} />
+          <input ref={fileRef} type="file" accept=".java,.py,.c" className="hidden" onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }} />
         </div>
 
         {notice ? (
@@ -285,7 +280,7 @@ function Analyzer() {
         <div className="grid gap-5 lg:grid-cols-2">
           <div className={show("editor")}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-soft">Java source</span>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-soft">{LANGS[lang].label} source</span>
               {result ? (
                 <div className="flex gap-1 font-mono text-[11px]">
                   <button type="button" onClick={() => setMode("edit")} className={`rounded px-2 py-1 ${mode === "edit" ? "bg-ink text-paper" : "text-ink-soft"}`}>Edit</button>
@@ -295,7 +290,7 @@ function Analyzer() {
             </div>
 
             {mode === "inspect" && result ? (
-              <CodeSlab code={result.source} issues={result.errors} activeLine={activeLine} onSelectLine={setActiveLine} />
+              <CodeSlab language={lang} code={result.source} issues={result.errors} activeLine={activeLine} onSelectLine={setActiveLine} />
             ) : (
               <div className="overflow-hidden rounded-[12px] bg-code ring-1 ring-black/5">
                 <div className="flex items-center justify-between border-b border-paper/10 px-4 py-2.5">
@@ -315,7 +310,7 @@ function Analyzer() {
                   <div className="relative flex-1 overflow-hidden">
                     <pre ref={preRef} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre py-3 pr-4 font-mono text-[13px] leading-6 text-code-ink">
                       {lines.map((l, i) => (
-                        <div key={i}>{l === "" ? " " : highlightJava(l)}</div>
+                        <div key={i}>{l === "" ? " " : highlightCode(l, lang)}</div>
                       ))}
                     </pre>
                     <textarea
@@ -338,7 +333,7 @@ function Analyzer() {
                           requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 4; });
                         }
                       }}
-                      placeholder="Write or paste Java code here…"
+                      placeholder={`Write or paste ${LANGS[lang].label} code here…`}
                       className="absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent py-3 pr-4 font-mono text-[13px] leading-6 text-transparent caret-code-ink outline-none placeholder:text-code-dim"
                     />
                   </div>
@@ -347,7 +342,7 @@ function Analyzer() {
             )}
 
             <label className="mt-3 block">
-              <span className="mb-1 block font-mono text-[11px] uppercase tracking-wider text-ink-soft">Program input (stdin, for Scanner)</span>
+              <span className="mb-1 block font-mono text-[11px] uppercase tracking-wider text-ink-soft">Program input (stdin — Scanner / input() / scanf)</span>
               <textarea
                 value={stdin}
                 onChange={(e) => setStdin(e.target.value)}
@@ -370,8 +365,8 @@ function Analyzer() {
 
         {result && !result.valid ? (
           <div ref={fixesRef} className={`mt-5 grid gap-5 md:grid-cols-2 ${showFixes ? "ring-2 ring-accent/40 rounded-[12px] p-1" : ""}`}>
-            <CodeSlab code={result.source} issues={result.errors} label="Original code" tone="before" />
-            <CodeSlab code={result.correctedCode} label="Suggested correction" tone="after" />
+            <CodeSlab code={result.source} issues={result.errors} language={lang} label="Original code" tone="before" />
+            <CodeSlab code={result.correctedCode} language={lang} label="Suggested correction" tone="after" />
           </div>
         ) : null}
       </div>
