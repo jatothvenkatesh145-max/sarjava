@@ -8,7 +8,9 @@
  */
 
 import { analyzeJava, type AnalysisIssue, type AnalysisResult } from "@/lib/java-analyzer";
-import { executeJava, type JudgeResult } from "@/lib/java-runner.functions";
+import { executeCode, type JudgeResult } from "@/lib/java-runner.functions";
+import { analyzePython, analyzeC, gccIssues, pythonIssues, javaRuntimeIssue, simulateOutput } from "@/lib/multi-analyzer";
+import { LANGS, type Lang } from "@/lib/languages";
 
 export const ANALYZER_MODE = "compiler" as const;
 
@@ -16,6 +18,7 @@ export interface AnalyzeRequest {
   code: string;
   fileName?: string;
   stdin?: string;
+  language?: Lang;
 }
 
 export class AnalyzerConnectionError extends Error {}
@@ -30,6 +33,8 @@ export interface RunResult {
   statusText?: string;
   time?: string | null;
   memoryKb?: number | null;
+  compileOutput?: string;
+  mode?: "real" | "simulated";
 }
 
 /** Plain-English explanation for a javac message when no heuristic matched. */
@@ -87,64 +92,82 @@ export function compilerIssues(compileOutput: string, code: string, heuristic: A
   return out;
 }
 
-function buildResult(judge: JudgeResult, code: string, fileName: string, started: number): AnalysisResult {
-  const heuristic = analyzeJava(code, fileName);
-  const compileFailed = judge.statusId === 6;
-  let errors: AnalysisIssue[] = compileFailed ? compilerIssues(judge.compileOutput, code, heuristic.errors) : [];
-  if (compileFailed && errors.length === 0) {
-    errors = [{ id: "javac-0", line: 1, type: "Compilation Error", severity: "error", message: judge.compileOutput.trim() || "Compilation failed", explanation: "The Java compiler could not compile this program.", suggestion: "Review the compiler message above.", originalLine: code.split("\n")[0] ?? "" }];
+export function heuristic(language: Lang, code: string, fileName: string): AnalysisResult {
+  const r = language === "python" ? analyzePython(code, fileName) : language === "c" ? analyzeC(code, fileName) : analyzeJava(code, fileName);
+  return { ...r, language };
+}
+
+function buildResult(language: Lang, judge: JudgeResult, code: string, fileName: string, started: number): AnalysisResult {
+  const h = heuristic(language, code, fileName);
+  let compileFailed = judge.statusId === 6;
+  let errors: AnalysisIssue[] = [];
+  if (language === "java") {
+    if (compileFailed) errors = compilerIssues(judge.compileOutput, code, h.errors);
+    else { const rt = javaRuntimeIssue(judge.stderr, code); if (rt) errors.push(rt); }
+  } else if (language === "c") {
+    errors = gccIssues(judge.compileOutput, code, h.errors);
+    if (!compileFailed) errors = errors.filter((e) => e.severity === "warning");
+    if (!compileFailed && judge.statusId >= 7) errors.push({ id: "crt-0", line: 1, type: `Runtime Error`, severity: "error", message: `runtime: ${judge.status}`, explanation: judge.status.includes("SIGFPE") ? "The program performed an invalid arithmetic operation, such as division by zero." : judge.status.includes("SIGSEGV") ? "The program accessed memory it does not own (bad pointer or array index)." : "The program crashed or returned a non-zero exit code.", suggestion: "Check divisions, array indexes and pointers.", originalLine: code.split("\n")[0] ?? "" });
+  } else {
+    const p = pythonIssues(judge.stderr, code);
+    errors = p.issues;
+    compileFailed = p.syntax;
   }
-  // Keep heuristic warnings (style / likely issues) when compilation succeeded.
-  if (!compileFailed) errors = heuristic.errors.filter((e) => e.severity === "warning");
+  if (compileFailed && errors.length === 0) {
+    errors = [{ id: "cc-0", line: 1, type: "Compilation Error", severity: "error", message: (judge.compileOutput || judge.stderr).trim() || "Compilation failed", explanation: "The compiler could not compile this program.", suggestion: "Review the compiler message.", originalLine: code.split("\n")[0] ?? "" }];
+  }
+  if (!compileFailed) errors = [...errors, ...h.errors.filter((e) => e.severity === "warning" && !errors.some((x) => x.line === e.line))];
   return {
     success: true,
     valid: !compileFailed,
     fileName,
     source: code,
-    correctedCode: compileFailed ? heuristic.correctedCode : code,
+    correctedCode: compileFailed ? h.correctedCode : code,
     lineCount: code.split("\n").length,
     durationMs: Date.now() - started,
     analyzedAt: new Date().toISOString(),
     errors,
+    language,
   };
 }
 
 function toRun(judge: JudgeResult): RunResult {
-  return {
-    status: "ok",
-    stdout: judge.stdout,
-    stderr: judge.stderr,
-    exitCode: judge.exitCode,
-    timedOut: judge.statusId === 5,
-    statusText: judge.status,
-    time: judge.time,
-    memoryKb: judge.memoryKb,
-  };
+  return { status: "ok", mode: "real", stdout: judge.stdout, stderr: judge.stderr, compileOutput: judge.compileOutput, exitCode: judge.exitCode, timedOut: judge.statusId === 5, statusText: judge.status, time: judge.time, memoryKb: judge.memoryKb };
 }
 
-async function callSandbox(code: string, stdin: string): Promise<JudgeResult> {
+async function callSandbox(language: Lang, code: string, stdin: string): Promise<JudgeResult> {
   try {
-    return await executeJava({ data: { code, stdin } });
+    return await executeCode({ data: { language, code, stdin } });
   } catch (e) {
-    throw new AnalyzerConnectionError(e instanceof Error ? e.message : "Java sandbox unreachable");
+    throw new AnalyzerConnectionError(e instanceof Error ? e.message : "Code sandbox unreachable");
   }
 }
 
-/** Compile with javac and return real diagnostics. */
-export async function analyzeCode({ code, fileName = "Main.java", stdin = "" }: AnalyzeRequest): Promise<AnalysisResult> {
+/** Real mode: compile with the language's compiler and return real diagnostics. */
+export async function analyzeCode({ code, fileName, stdin = "", language = "java" }: AnalyzeRequest): Promise<AnalysisResult> {
   const started = Date.now();
-  return buildResult(await callSandbox(code, stdin), code, fileName, started);
+  const f = fileName ?? LANGS[language].file;
+  return buildResult(language, await callSandbox(language, code, stdin), code, f, started);
 }
 
-/** Compile, and if successful, execute — one sandbox round-trip. */
-export async function analyzeAndRun({ code, fileName = "Main.java", stdin = "" }: AnalyzeRequest): Promise<{ result: AnalysisResult; run: RunResult }> {
+/** Real mode: compile + execute in one sandbox round-trip. */
+export async function analyzeAndRun({ code, fileName, stdin = "", language = "java" }: AnalyzeRequest): Promise<{ result: AnalysisResult; run: RunResult }> {
   const started = Date.now();
-  const judge = await callSandbox(code, stdin);
-  const result = buildResult(judge, code, fileName, started);
+  const f = fileName ?? LANGS[language].file;
+  const judge = await callSandbox(language, code, stdin);
+  const result = buildResult(language, judge, code, f, started);
   const run: RunResult = result.valid
     ? toRun(judge)
-    : { status: "blocked", stdout: "", stderr: judge.compileOutput, exitCode: null, timedOut: false, statusText: judge.status, message: "Program cannot be executed because compilation errors were detected." };
+    : { status: "blocked", mode: "real", stdout: "", stderr: judge.stderr, compileOutput: judge.compileOutput, exitCode: judge.exitCode, timedOut: false, statusText: judge.status, message: "Program cannot be executed because compilation/syntax errors were detected." };
   return { result, run };
+}
+
+/** Simulated mode: heuristic analysis + illustrative output only. Never executes. */
+export function simulate({ code, fileName, language = "java" }: AnalyzeRequest): { result: AnalysisResult; run: RunResult } {
+  const result = heuristic(language, code, fileName ?? LANGS[language].file);
+  if (!result.valid) return { result, run: { status: "blocked", mode: "simulated", stdout: "", stderr: "", exitCode: null, timedOut: false, message: "Likely errors were found by the heuristic checker, so no illustrative output is shown." } };
+  const s = simulateOutput(language, code);
+  return { result, run: { status: s.stdout == null ? "unavailable" : "ok", mode: "simulated", stdout: s.stdout ?? "", stderr: "", exitCode: null, timedOut: false, message: s.note, statusText: "simulated" } };
 }
 
 export type { AnalysisResult };
