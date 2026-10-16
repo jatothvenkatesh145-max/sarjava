@@ -7,75 +7,56 @@ interface OutputPanelProps {
   onClear: () => void;
 }
 
-/** Dark console showing real program output returned by the Java sandbox. */
+function Section({ title, tone, text }: { title: string; tone: string; text: string }) {
+  return (
+    <div className="border-t border-paper/10 first:border-t-0 px-4 py-3">
+      <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-code-dim">{title}</p>
+      <pre className={`whitespace-pre-wrap font-mono text-[13px] leading-6 ${tone}`}>{text}</pre>
+    </div>
+  );
+}
+
+/** Console showing real sandbox output (or clearly labeled simulated output). */
 export function OutputPanel({ run, running, onClear }: OutputPanelProps) {
   const [copied, setCopied] = useState(false);
-  let body: React.ReactNode;
-  let status = "idle";
-  if (running) {
-    body = <p className="text-code-dim">compiling and running in sandbox…</p>;
-    status = "running";
-  } else if (!run) {
-    body = <p className="text-code-dim">Click “Run Code” to compile and execute your program. Output appears here.</p>;
-  } else if (run.status === "blocked") {
-    status = run.statusText ?? "not executed";
-    body = (
-      <>
-        <p className="text-code-err">{run.message}</p>
-        {run.stderr ? <pre className="mt-2 whitespace-pre-wrap text-code-err/80">{run.stderr}</pre> : null}
-      </>
-    );
-  } else if (run.status === "unavailable" || run.status === "failed") {
-    status = "unavailable";
-    body = <p className="text-amber">{run.message}</p>;
-  } else {
-    status = [run.statusText, run.exitCode != null ? `exit ${run.exitCode}` : null, run.time ? `${run.time}s` : null, run.memoryKb ? `${Math.round(run.memoryKb / 1024)} MB` : null]
-      .filter(Boolean)
-      .join(" · ");
-    body = (
-      <>
-        {run.stdout ? (
-          <pre className="whitespace-pre-wrap text-code-ink">{run.stdout}</pre>
-        ) : !run.stderr ? (
-          <p className="text-code-str">Program executed successfully with no console output.</p>
-        ) : null}
-        {run.stderr ? <pre className="mt-2 whitespace-pre-wrap text-code-err">{run.stderr}</pre> : null}
-        {run.timedOut ? <p className="mt-2 text-amber">Execution stopped: time limit exceeded.</p> : null}
-      </>
-    );
-  }
-
-  const copyText = run ? [run.stdout, run.stderr].filter(Boolean).join("\n") : "";
+  const simulated = run?.mode === "simulated";
+  const stats = run
+    ? [run.statusText, run.exitCode != null ? `exit ${run.exitCode}` : null, run.time ? `${run.time}s` : null, run.memoryKb ? `${Math.round(run.memoryKb / 1024)} MB` : null].filter(Boolean).join(" · ")
+    : "";
+  const copyText = run ? [run.stdout, run.stderr, run.compileOutput].filter(Boolean).join("\n") : "";
 
   return (
     <div className="overflow-hidden rounded-[12px] bg-code ring-1 ring-black/5">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-paper/10 px-4 py-2">
-        <span className="font-mono text-[11px] uppercase tracking-wider text-code-dim">Program Output</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-code-dim">Program Output</span>
+          {run ? (
+            <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider ${simulated ? "bg-amber/20 text-amber" : "bg-ok/20 text-code-str"}`}>
+              {simulated ? "SIMULATED OUTPUT — NOT ACTUAL EXECUTION" : "ACTUAL EXECUTION"}
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[11px] text-code-dim">{status}</span>
-          <button
-            type="button"
-            disabled={!copyText}
-            onClick={async () => {
-              await navigator.clipboard.writeText(copyText);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
-            }}
-            className="font-mono text-[11px] text-code-ink hover:underline disabled:opacity-40"
-          >
-            {copied ? "Copied" : "Copy"}
+          <button type="button" disabled={!copyText} onClick={async () => { await navigator.clipboard.writeText(copyText); setCopied(true); setTimeout(() => setCopied(false), 1200); }} className="font-mono text-[11px] text-code-ink hover:underline disabled:opacity-40">
+            {copied ? "Copied" : "Copy Output"}
           </button>
-          <button
-            type="button"
-            disabled={!run}
-            onClick={onClear}
-            className="font-mono text-[11px] text-code-ink hover:underline disabled:opacity-40"
-          >
-            Clear Output
-          </button>
+          <button type="button" disabled={!run} onClick={onClear} className="font-mono text-[11px] text-code-ink hover:underline disabled:opacity-40">Clear Output</button>
         </div>
       </div>
-      <div className="min-h-[96px] p-4 font-mono text-[13px] leading-6">{body}</div>
+      {running ? (
+        <p className="min-h-[96px] p-4 font-mono text-[13px] text-code-dim">compiling and running in sandbox…</p>
+      ) : !run ? (
+        <p className="min-h-[96px] p-4 font-mono text-[13px] text-code-dim">Click “Run Code” to execute your program. Output appears here.</p>
+      ) : (
+        <div>
+          <Section title="Execution status" tone={run.status === "ok" ? "text-code-str" : "text-amber"} text={[stats || (simulated ? "not executed" : run.status), run.message, run.timedOut ? "Execution stopped: time limit exceeded." : null].filter(Boolean).join("\n")} />
+          {run.compileOutput ? <Section title="Compilation errors" tone="text-code-err" text={run.compileOutput} /> : null}
+          {run.status === "ok" || run.stdout ? (
+            <Section title="Standard output" tone="text-code-ink" text={run.stdout || (simulated ? "(none)" : "Program executed successfully with no console output.")} />
+          ) : null}
+          {run.stderr ? <Section title="Standard error" tone="text-code-err" text={run.stderr} /> : null}
+        </div>
+      )}
     </div>
   );
 }
