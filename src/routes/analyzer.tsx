@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CodeSlab } from "@/components/CodeSlab";
 import { ResultPanel } from "@/components/ResultPanel";
 import { OutputPanel } from "@/components/OutputPanel";
+import { GeminiExplanationPanel } from "@/components/GeminiExplanationPanel";
 import { highlightCode } from "@/components/java-highlight";
 import { analyzeCode, analyzeAndRun, simulate, type RunResult } from "@/services/analyzerService";
 import { EXAMPLES, LANGS, langFromFile, type Lang } from "@/lib/languages";
@@ -53,6 +54,7 @@ function Analyzer() {
   const [mode, setMode] = useState<"edit" | "inspect">("edit");
   const [tab, setTab] = useState<Tab>("editor");
   const [showFixes, setShowFixes] = useState(false);
+  const [geminiTrigger, setGeminiTrigger] = useState(0);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const fixesRef = useRef<HTMLDivElement>(null);
@@ -108,7 +110,9 @@ function Analyzer() {
     if (execMode === "simulated") { report(simulate({ code, fileName, language: lang }).result); setTab("errors"); return; }
     setLoading(true);
     try {
-      report(await analyzeCode({ code, fileName, stdin, language: lang }));
+      const analyzed = await analyzeCode({ code, fileName, stdin, language: lang });
+      report(analyzed);
+      if (lang === "java") setGeminiTrigger((current) => current + 1);
       setTab("errors");
     } catch {
       setNotice({ tone: "error", text: "Unable to reach the code execution service. Check your connection and try again." });
@@ -125,6 +129,7 @@ function Analyzer() {
     try {
       const { result: res, run: r } = await analyzeAndRun({ code, fileName, stdin, language: lang });
       report(res);
+      if (lang === "java") setGeminiTrigger((current) => current + 1);
       setRun(r);
       setTab(res.valid ? "output" : "errors");
     } catch (e) {
@@ -355,6 +360,7 @@ function Analyzer() {
 
           <div className={show("errors")}>
             <ResultPanel result={result} loading={loading || running} activeLine={activeLine} onSelectLine={setActiveLine} />
+            <GeminiExplanationPanel result={result} mode={execMode} language={lang} trigger={geminiTrigger} />
           </div>
         </div>
 
