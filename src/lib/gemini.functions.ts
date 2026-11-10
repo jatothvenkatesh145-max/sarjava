@@ -13,6 +13,13 @@ const requestSchema = z.object({
     suggestion: z.string().max(1600),
     originalLine: z.string().max(1000),
   })).max(20),
+}).strict().superRefine((input, context) => {
+  const lineCount = input.source.split("\n").length;
+  input.diagnostics.forEach((diagnostic, index) => {
+    if (diagnostic.line > lineCount) {
+      context.addIssue({ code: "custom", path: ["diagnostics", index, "line"], message: "Diagnostic line is outside the source." });
+    }
+  });
 });
 
 const requestTimestamps = new Map<string, number[]>();
@@ -34,7 +41,7 @@ export type GeminiExplanationResult =
 export const explainJavaDiagnostics = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => requestSchema.parse(input))
   .handler(async ({ data }): Promise<GeminiExplanationResult> => {
-    const ip = getRequestHeader("cf-connecting-ip") || getRequestHeader("x-forwarded-for")?.split(",")[0]?.trim() || "anon";
+    const ip = getRequestHeader("cf-connecting-ip") || "anon";
     if (isRateLimited(ip)) return { ok: false, reason: "rate_limited" };
 
     const apiKey = process.env["GEMINI_API_KEY"];
@@ -42,5 +49,6 @@ export const explainJavaDiagnostics = createServerFn({ method: "POST" })
 
     const { requestGeminiCommentary } = await import("@/lib/gemini.server");
     const result = await requestGeminiCommentary(apiKey, data.source, data.diagnostics);
-    return result.kind === "ok" ? { ok: true, commentary: result.commentary } : { ok: false, reason: result.kind };
+    if (result.kind === "ok") return { ok: true, commentary: result.commentary };
+    return { ok: false, reason: result.kind === "rejected" ? "provider_rejected" : result.kind };
   });

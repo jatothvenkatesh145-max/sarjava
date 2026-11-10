@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 
 import { Button } from "@/components/ui/button";
 import { explainJavaDiagnostics } from "@/lib/gemini.functions";
@@ -7,8 +8,9 @@ import type { GeminiCommentary } from "@/lib/gemini.server";
 
 interface GeminiExplanationPanelProps {
   result: AnalysisResult | null;
-  mode: "real" | "simulated";
+  analysisOrigin: "compiler" | "simulated" | "unknown";
   language: string;
+  currentSource: string;
   trigger: number;
 }
 
@@ -20,7 +22,8 @@ const ERROR_COPY: Record<string, string> = {
   unavailable: "Gemini is temporarily unavailable. Your compiler results are still available; try again.",
 };
 
-export function GeminiExplanationPanel({ result, mode, language, trigger }: GeminiExplanationPanelProps) {
+export function GeminiExplanationPanel({ result, analysisOrigin, language, currentSource, trigger }: GeminiExplanationPanelProps) {
+  const explainJava = useServerFn(explainJavaDiagnostics);
   const [commentary, setCommentary] = useState<GeminiCommentary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,20 +33,20 @@ export function GeminiExplanationPanel({ result, mode, language, trigger }: Gemi
     setCommentary(null);
     setError(null);
     setLoading(false);
-  }, [result, mode, language]);
+  }, [result, analysisOrigin, language, currentSource]);
 
   useEffect(() => {
     if (trigger > 0) setAttempt((current) => current + 1);
   }, [trigger]);
 
   useEffect(() => {
-    if (attempt === 0 || !result || language !== "java" || mode !== "real") return;
+    if (attempt === 0 || !result || language !== "java" || analysisOrigin !== "compiler" || result.source !== currentSource) return;
     let active = true;
     setLoading(true);
     setError(null);
     setCommentary(null);
 
-    void explainJavaDiagnostics({
+    void explainJava({
       data: {
         source: result.source,
         diagnostics: result.errors.map(({ line, type, severity, message, explanation, suggestion, originalLine }) => ({
@@ -53,19 +56,19 @@ export function GeminiExplanationPanel({ result, mode, language, trigger }: Gemi
     }).then((response) => {
       if (!active) return;
       if (response.ok) setCommentary(response.commentary);
-      else setError(ERROR_COPY[response.reason] ?? ERROR_COPY.unavailable ?? "Gemini is temporarily unavailable.");
+      else setError(ERROR_COPY[response.reason] ?? ERROR_COPY["unavailable"] ?? "Gemini is temporarily unavailable.");
     }).catch(() => {
-      if (active) setError(ERROR_COPY.unavailable ?? "Gemini is temporarily unavailable.");
+      if (active) setError(ERROR_COPY["unavailable"] ?? "Gemini is temporarily unavailable.");
     }).finally(() => {
       if (active) setLoading(false);
     });
 
     return () => { active = false; };
-  }, [attempt, result, mode, language]);
+  }, [attempt, result, analysisOrigin, language, currentSource, explainJava]);
 
   if (language !== "java") return null;
 
-  const canExplain = Boolean(result && mode === "real");
+  const canExplain = Boolean(result && analysisOrigin === "compiler" && result.source === currentSource);
   return (
     <section aria-labelledby="gemini-explanation-title" className="mt-4 overflow-hidden rounded-[12px] bg-card ring-1 ring-black/5">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -80,7 +83,9 @@ export function GeminiExplanationPanel({ result, mode, language, trigger }: Gemi
 
       <div aria-live="polite" className="space-y-4 p-4">
         {!result ? <p className="text-sm text-ink-soft">Run Detect Errors to get separate AI explanations for your Java diagnostics.</p> : null}
-        {result && mode === "simulated" ? <p className="text-sm text-ink-soft">AI explanations are available for compiler-confirmed Java analysis, not simulated results.</p> : null}
+        {result && analysisOrigin === "simulated" ? <p className="text-sm text-ink-soft">AI explanations are available for compiler-confirmed Java analysis, not simulated results.</p> : null}
+        {result && analysisOrigin === "unknown" ? <p className="text-sm text-ink-soft">Run a new real Java analysis to request AI commentary. Saved history may not record whether it came from real or simulated mode.</p> : null}
+        {result && analysisOrigin === "compiler" && result.source !== currentSource ? <p className="text-sm text-ink-soft">The editor has changed since this analysis. Run Detect Errors again to refresh the AI commentary.</p> : null}
         {loading ? <p className="text-sm text-ink-soft">Gemini is reviewing the Java diagnostics…</p> : null}
         {error ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -88,7 +93,7 @@ export function GeminiExplanationPanel({ result, mode, language, trigger }: Gemi
             <Button type="button" variant="outline" size="sm" disabled={!canExplain || loading} onClick={() => setAttempt((current) => current + 1)}>Try again</Button>
           </div>
         ) : null}
-        {commentary ? (
+        {commentary && result ? (
           <>
             <p className="text-sm leading-6 text-ink">{commentary.summary}</p>
             {commentary.diagnostics.length ? (

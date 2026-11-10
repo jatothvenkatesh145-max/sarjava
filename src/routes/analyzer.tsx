@@ -55,6 +55,7 @@ function Analyzer() {
   const [tab, setTab] = useState<Tab>("editor");
   const [showFixes, setShowFixes] = useState(false);
   const [geminiTrigger, setGeminiTrigger] = useState(0);
+  const [analysisOrigin, setAnalysisOrigin] = useState<"compiler" | "simulated" | "unknown">("unknown");
 
   const fileRef = useRef<HTMLInputElement>(null);
   const fixesRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,7 @@ function Analyzer() {
       setLang(found.language ?? "java");
       setFileName(found.fileName);
       setResult(found);
+      setAnalysisOrigin("unknown");
       setMode("inspect");
     }
   }, [record, records]);
@@ -96,8 +98,9 @@ function Analyzer() {
     return true;
   }
 
-  function report(res: AnalysisResult) {
+  function report(res: AnalysisResult, origin: "compiler" | "simulated") {
     setResult(res);
+    setAnalysisOrigin(origin);
     setMode("inspect");
     saveAnalysis(res);
     const n = res.errors.filter((e) => e.severity === "error").length;
@@ -107,11 +110,11 @@ function Analyzer() {
 
   async function detect() {
     if (!guard()) return;
-    if (execMode === "simulated") { report(simulate({ code, fileName, language: lang }).result); setTab("errors"); return; }
+    if (execMode === "simulated") { report(simulate({ code, fileName, language: lang }).result, "simulated"); setTab("errors"); return; }
     setLoading(true);
     try {
       const analyzed = await analyzeCode({ code, fileName, stdin, language: lang });
-      report(analyzed);
+      report(analyzed, "compiler");
       if (lang === "java") setGeminiTrigger((current) => current + 1);
       setTab("errors");
     } catch {
@@ -123,12 +126,12 @@ function Analyzer() {
 
   async function runProgram() {
     if (!guard()) return;
-    if (execMode === "simulated") { const sres = simulate({ code, fileName, language: lang }); report(sres.result); setRun(sres.run); setTab("output"); return; }
+    if (execMode === "simulated") { const sres = simulate({ code, fileName, language: lang }); report(sres.result, "simulated"); setRun(sres.run); setTab("output"); return; }
     setRunning(true);
     setRun(null);
     try {
       const { result: res, run: r } = await analyzeAndRun({ code, fileName, stdin, language: lang });
-      report(res);
+      report(res, "compiler");
       if (lang === "java") setGeminiTrigger((current) => current + 1);
       setRun(r);
       setTab(res.valid ? "output" : "errors");
@@ -171,6 +174,7 @@ function Analyzer() {
       setFileName(file.name);
       setLang(fl);
       setResult(null);
+      setAnalysisOrigin("unknown");
       setRun(null);
       setMode("edit");
       setTab("editor");
@@ -186,6 +190,7 @@ function Analyzer() {
     setStdin(ex.stdin ?? "");
     setFileName(LANGS[lang].file);
     setResult(null);
+    setAnalysisOrigin("unknown");
     setRun(null);
     setShowFixes(false);
     setMode("edit");
@@ -199,6 +204,7 @@ function Analyzer() {
     setFileName(LANGS[l].file);
     setStdin("");
     setResult(null);
+    setAnalysisOrigin("unknown");
     setRun(null);
     setShowFixes(false);
     setMode("edit");
@@ -209,6 +215,7 @@ function Analyzer() {
   function clearCode() {
     setCode("");
     setResult(null);
+    setAnalysisOrigin("unknown");
     setRun(null);
     setActiveLine(null);
     setShowFixes(false);
@@ -360,7 +367,7 @@ function Analyzer() {
 
           <div className={show("errors")}>
             <ResultPanel result={result} loading={loading || running} activeLine={activeLine} onSelectLine={setActiveLine} />
-            <GeminiExplanationPanel result={result} mode={execMode} language={lang} trigger={geminiTrigger} />
+            <GeminiExplanationPanel result={result} analysisOrigin={analysisOrigin} language={lang} currentSource={code} trigger={geminiTrigger} />
           </div>
         </div>
 

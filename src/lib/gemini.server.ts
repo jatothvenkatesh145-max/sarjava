@@ -25,7 +25,7 @@ function asBoundedText(value: unknown, max: number): string | null {
   return typeof value === "string" && value.length <= max ? value : null;
 }
 
-function parseCommentary(text: string, source: string, diagnostics: GeminiDiagnostic[]): GeminiCommentary | null {
+export function parseCommentary(text: string, diagnostics: GeminiDiagnostic[]): GeminiCommentary | null {
   try {
     const raw: unknown = JSON.parse(text);
     if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -80,7 +80,7 @@ export async function requestGeminiCommentary(
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -92,7 +92,7 @@ export async function requestGeminiCommentary(
       },
     );
     if (!response.ok) {
-      return { kind: response.status === 400 || response.status === 403 ? "rejected" : "unavailable" };
+      return { kind: response.status === 400 || response.status === 401 || response.status === 403 ? "rejected" : "unavailable" };
     }
 
     const payload: unknown = await response.json();
@@ -111,7 +111,7 @@ export async function requestGeminiCommentary(
       return typeof partText === "string" ? [partText] : [];
     }).join("");
     if (!text || text.length > MAX_RESPONSE_CHARS) return { kind: "unavailable" };
-    const commentary = parseCommentary(text, source, diagnostics);
+    const commentary = parseCommentary(text, diagnostics);
     return commentary ? { kind: "ok", commentary } : { kind: "unavailable" };
   } catch (error) {
     return error instanceof Error && error.name === "AbortError" ? { kind: "timeout" } : { kind: "unavailable" };
