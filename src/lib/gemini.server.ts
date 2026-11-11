@@ -19,7 +19,7 @@ export interface GeminiCommentary {
   correctedCode: string;
 }
 
-const MAX_RESPONSE_CHARS = 20_000;
+const MAX_RESPONSE_CHARS = 40_000;
 
 function asBoundedText(value: unknown, max: number): string | null {
   return typeof value === "string" && value.length <= max ? value : null;
@@ -86,7 +86,7 @@ export async function requestGeminiCommentary(
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json", maxOutputTokens: 8192 },
         }),
         signal: controller.signal,
       },

@@ -1,26 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
-import { z } from "zod";
-
-const requestSchema = z.object({
-  source: z.string().min(1).max(64 * 1024),
-  diagnostics: z.array(z.object({
-    line: z.number().int().positive(),
-    type: z.string().max(100),
-    severity: z.enum(["error", "warning"]),
-    message: z.string().max(1000),
-    explanation: z.string().max(1600),
-    suggestion: z.string().max(1600),
-    originalLine: z.string().max(1000),
-  })).max(20),
-}).strict().superRefine((input, context) => {
-  const lineCount = input.source.split("\n").length;
-  input.diagnostics.forEach((diagnostic, index) => {
-    if (diagnostic.line > lineCount) {
-      context.addIssue({ code: "custom", path: ["diagnostics", index, "line"], message: "Diagnostic line is outside the source." });
-    }
-  });
-});
+import { geminiRequestSchema } from "@/lib/gemini.schema";
 
 const requestTimestamps = new Map<string, number[]>();
 
@@ -39,7 +19,7 @@ export type GeminiExplanationResult =
 
 /** Optional Java tutor commentary; never changes the deterministic Judge0 result. */
 export const explainJavaDiagnostics = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => requestSchema.parse(input))
+  .inputValidator((input: unknown) => geminiRequestSchema.parse(input))
   .handler(async ({ data }): Promise<GeminiExplanationResult> => {
     const ip = getRequestHeader("cf-connecting-ip") || "anon";
     if (isRateLimited(ip)) return { ok: false, reason: "rate_limited" };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ export function GeminiExplanationPanel({ result, analysisOrigin, language, curre
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const pendingRequest = useRef<{ key: string; promise: ReturnType<typeof explainJava> } | null>(null);
 
   useEffect(() => {
     setCommentary(null);
@@ -40,20 +41,28 @@ export function GeminiExplanationPanel({ result, analysisOrigin, language, curre
   }, [trigger]);
 
   useEffect(() => {
-    if (attempt === 0 || !result || language !== "java" || analysisOrigin !== "compiler" || result.source !== currentSource) return;
+    if (trigger === 0 && attempt === 0) return;
+    if (!result || language !== "java" || analysisOrigin !== "compiler" || result.source !== currentSource) return;
     let active = true;
     setLoading(true);
     setError(null);
     setCommentary(null);
 
-    void explainJava({
-      data: {
-        source: result.source,
-        diagnostics: result.errors.map(({ line, type, severity, message, explanation, suggestion, originalLine }) => ({
+    const requestKey = `${trigger}:${attempt}:${result.analyzedAt}`;
+    let request = pendingRequest.current?.key === requestKey ? pendingRequest.current.promise : null;
+    if (!request) {
+      request = explainJava({
+        data: {
+          source: result.source,
+          diagnostics: result.errors.slice(0, 20).map(({ line, type, severity, message, explanation, suggestion, originalLine }) => ({
           line, type, severity, message, explanation, suggestion, originalLine,
-        })),
-      },
-    }).then((response) => {
+          })),
+        },
+      });
+      pendingRequest.current = { key: requestKey, promise: request };
+    }
+
+    void request.then((response) => {
       if (!active) return;
       if (response.ok) setCommentary(response.commentary);
       else setError(ERROR_COPY[response.reason] ?? ERROR_COPY["unavailable"] ?? "Gemini is temporarily unavailable.");
@@ -64,7 +73,7 @@ export function GeminiExplanationPanel({ result, analysisOrigin, language, curre
     });
 
     return () => { active = false; };
-  }, [attempt, result, analysisOrigin, language, currentSource, explainJava]);
+  }, [attempt, trigger, result, analysisOrigin, language, currentSource, explainJava]);
 
   if (language !== "java") return null;
 
@@ -75,6 +84,7 @@ export function GeminiExplanationPanel({ result, analysisOrigin, language, curre
         <div>
           <h2 id="gemini-explanation-title" className="font-mono text-[11px] uppercase tracking-wider text-ink">AI commentary · Gemini</h2>
           <p className="mt-1 text-xs text-ink-soft">Learning suggestions only · Judge0 remains the source of compiler results</p>
+          <p className="mt-1 text-xs text-ink-soft">Java source and diagnostics are sent to Google when AI commentary is generated.</p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={!canExplain || loading} onClick={() => setAttempt((current) => current + 1)}>
           {loading ? "Thinking…" : commentary ? "Ask again" : "Explain with Gemini"}
